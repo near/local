@@ -1,0 +1,82 @@
+version: "3"
+services:
+  contract-helper-db:
+    image: nearprotocol/contract-helper-db
+    ports:
+      - 5432:5432
+  contract-helper-app:
+    image: nearprotocol/contract-helper-app
+    environment:
+      - NODE_URL=http://bridge:3030
+      - INDEXER_DB_CONNECTION=postgres://indexer:indexer@contract-helper-db/indexer
+      - HELPER_DB_USERNAME=helper
+      - HELPER_DB_PASSWORDS=helper
+      - HELPER_DB_NAME=accounts_development
+      - HELPER_DB_HOST=contract-helper-db
+    depends_on:
+      - contract-helper-db
+    ports:
+      - 3000:3000
+  bridge:
+    image: nearprotocol/bridge
+    ports:
+      - 3030:3030
+      - 9545:9545
+      - 8080:8080
+      - 8081:8081
+      - 9000:9000
+  indexer:
+    image: nearprotocol/indexer-for-explorer
+    environment:
+      - DATABASE_URL=postgres://indexer:indexer@contract-helper-db/indexer
+    command: "sh -c 'sleep 10 && diesel migration run && ./target/release/indexer-explorer run sync-from-latest'"
+  wallet:
+    environment:
+      - REACT_APP_ACCOUNT_HELPER_URL=http://localhost:3000
+      - REACT_APP_ACCOUNT_ID_SUFFIX=node0
+      - REACT_APP_IS_MAINNET=false
+      - REACT_APP_NODE_URL=http://localhost:3030
+      - REACT_APP_ACCESS_KEY_FUNDING_AMOUNT="3000000000000000000000000"
+      - EXPLORER_URL=http://localhost:9001
+    image: nearprotocol/wallet
+    ports:
+      - 1234:1234
+  linkdrop:
+    image: nearprotocol/linkdrop
+    environment:
+      - NODE_URL="http://bridge:3030"
+  explorer-wamp:
+    image: nearprotocol/explorer-wamp
+    environment:
+      - WAMP_NEAR_EXPLORER_PORT=9090
+      - WAMP_NEAR_EXPLORER_BACKEND_SECRET=back
+    ports:
+      - 9090:9090
+
+  explorer-backend:
+    image: nearprotocol/explorer-backend
+    environment:
+      - NEAR_RPC_URL=http://bridge:3030
+      - NEAR_GENESIS_RECORDS_URL=http://bridge:9000/genesis.json
+      - WAMP_NEAR_EXPLORER_URL=ws://explorer-wamp:9090/ws
+      - WAMP_NEAR_EXPLORER_BACKEND_SECRET=back
+    mem_limit: 1G
+    command: sleep 100000
+
+  explorer-frontend:
+    image: nearprotocol/explorer-frontend
+    environment:
+      - PORT=9001
+      - WAMP_NEAR_EXPLORER_URL=ws://localhost:9090/ws
+      - WAMP_NEAR_EXPLORER_INTERNAL_URL=ws://explorer-wamp:9090/ws
+      - 'NEAR_NETWORKS=[{"name": "localhostnet","explorerLink": "http://localhost:3000","aliases": ["localhost:3000", "localhost", "127.0.0.1", "127.0.0.1:3000"],"nearWalletProfilePrefix": "http://localhost:1234/profile"}]'
+    ports:
+      - 9001:9001
+  bridge-frontend:
+    image: nearprotocol/bridge-frontend
+    environment:
+      - ETH_NODE_URL=bridge:9545
+      - NEAR_WALLET_URL=http://localhost:1234
+      - NEAR_HELPER_URL=http://localhost:3000
+    ports:
+      - 2000:1234
